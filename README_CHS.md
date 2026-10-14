@@ -663,7 +663,7 @@ X 上除了我的个人账户（https://x.com/Martin993886460）之外的任何 
 
 想要通过航班搜索、旅行规划或抢购最佳购物优惠等功能来提升 AgenticSeek 的能力？考虑使用 SerpApi 制作自定义工具，以解锁更多 Jarvis 般的功能。使用 SerpApi，您可以为专业任务加速您的代理，同时保持完全控制。
 
-<a href="https://serpapi.com/"><img src="./media/banners/sponsor_banner_serpapi.png" height="350" alt="SerpApi Banner" ></a>
+可选的第三方集成请参考贡献指南。
 
 查看 [Contributing.md](./docs/CONTRIBUTING.md) 了解如何集成自定义工具！
 

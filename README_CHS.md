@@ -4,7 +4,7 @@
 <img align="center" src="./media/agentic_seek_logo.png" width="300" height="300" alt="Agentic Seek Logo">
 <p>
 
-  English | [中文](./README_CHS.md) | [繁體中文](./README_CHT.md) | [Français](./README_FR.md) | [日本語](./README_JP.md) | [Português (Brasil)](./README_PTBR.md) | [Español](./README_ES.md) | [Türkçe](./README_TR.md)
+  [English](./README.md) | 中文
 
 *一个**100%本地运行的 Manus AI 替代品**，支持语音的 AI 助手，可自主浏览网页、编写代码、规划任务，所有数据仅保存在你的设备上。专为本地推理模型设计，完全在你的硬件上运行，确保隐私无忧，无需云端依赖。*
 

@@ -5,9 +5,20 @@ import platform
 import threading
 import itertools
 import time
+import sys
 
 thinking_event = threading.Event()
 current_animation_thread = None
+
+def _console_safe(text):
+    """Replace glyphs unsupported by the active console instead of crashing a run."""
+    value = str(text)
+    encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+    try:
+        value.encode(encoding)
+        return value
+    except (UnicodeEncodeError, LookupError):
+        return value.encode(encoding, errors="replace").decode(encoding, errors="replace")
 
 def get_color_map():
     if platform.system().lower() != "windows":
@@ -56,7 +67,7 @@ def pretty_print(text, color="info", no_newline=False):
     color_map = get_color_map()
     if color not in color_map:
         color = "info"
-    print(colored(text, color_map[color]), end='' if no_newline else "\n")
+    print(colored(_console_safe(text), color_map[color]), end='' if no_newline else "\n")
 
 def animate_thinking(text, color="status", duration=120):
     """
@@ -83,20 +94,24 @@ def animate_thinking(text, color="status", duration=120):
             "info": (Fore.CYAN, "cyan")
         }
         fore_color, term_color = color_map.get(color, color_map["default"])
-        spinner = itertools.cycle([
+        unicode_frames = [
             '▉▁▁▁▁▁', '▉▉▂▁▁▁', '▉▉▉▃▁▁', '▉▉▉▉▅▁', '▉▉▉▉▉▇', '▉▉▉▉▉▉',
             '▉▉▉▉▇▅', '▉▉▉▆▃▁', '▉▉▅▃▁▁', '▉▇▃▁▁▁', '▇▃▁▁▁▁', '▃▁▁▁▁▁',
             '▁▃▅▃▁▁', '▁▅▉▅▁▁', '▃▉▉▉▃▁', '▅▉▁▉▅▃', '▇▃▁▃▇▅', '▉▁▁▁▉▇',
             '▉▅▃▁▃▅', '▇▉▅▃▅▇', '▅▉▇▅▇▉', '▃▇▉▇▉▅', '▁▅▇▉▇▃', '▁▃▅▇▅▁' 
-        ])
+        ]
+        frames = unicode_frames if _console_safe(unicode_frames[0]) == unicode_frames[0] else [
+            '[>     ]', '[=>    ]', '[==>   ]', '[===>  ]', '[====> ]', '[=====]'
+        ]
+        spinner = itertools.cycle(frames)
         end_time = time.time() + duration
 
         while not thinking_event.is_set() and time.time() < end_time:
             symbol = next(spinner)
             if platform.system().lower() != "windows":
-                print(f"\r{fore_color}{symbol} {text}{Fore.RESET}", end="", flush=True)
+                print(_console_safe(f"\r{fore_color}{symbol} {text}{Fore.RESET}"), end="", flush=True)
             else:
-                print(f"\r{colored(f'{symbol} {text}', term_color)}", end="", flush=True)
+                print(_console_safe(f"\r{colored(f'{symbol} {text}', term_color)}"), end="", flush=True)
             time.sleep(0.2)
         print("\r" + " " * (len(text) + 7) + "\r", end="", flush=True)
     current_animation_thread = threading.Thread(target=_animate, daemon=True)

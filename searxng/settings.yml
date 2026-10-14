@@ -184,7 +184,12 @@ ui:
 #
 outgoing:
   # default timeout in seconds, can be override by engine
-  request_timeout: 3.0
+  request_timeout: 10.0
+  # Windows host proxy; containers cannot use the host's 127.0.0.1.
+  # Keep this port aligned with the running local proxy client.
+  proxies:
+    all://:
+      - http://host.docker.internal:7897
   # the maximum timeout in seconds
   # max_request_timeout: 10.0
   # suffix of searx_useragent, could contain information like an email address
@@ -537,7 +542,7 @@ engines:
   - name: bing
     engine: bing
     shortcut: bi
-    disabled: true
+    disabled: false
 
   - name: bing images
     engine: bing_images

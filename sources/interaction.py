@@ -1,9 +1,15 @@
+# 获取输入输出，负责分派任务，负责管理不同 Agent 之间的记忆交接，负责输出和展示结果
+import asyncio
+import json
+import os
 import readline
+from pathlib import Path
 from typing import List, Tuple, Type, Dict
 
 from sources.text_to_speech import Speech
 from sources.utility import pretty_print, animate_thinking
 from sources.router import AgentRouter
+from sources.skills import SkillRegistry, SkillSelector
 from sources.speech_to_text import AudioTranscriber, AudioRecorder
 import threading
 
@@ -28,12 +34,21 @@ class Interaction:
         self.stt_enabled = stt_enabled
         self.recover_last_session = recover_last_session
         self.router = AgentRouter(self.agents, supported_language=langs)
+        default_skills_root = Path(__file__).resolve().parents[1] / "skills"
+        self.skill_registry = SkillRegistry(os.getenv("SKILLS_ROOT", str(default_skills_root)))
+        self.skill_selector = SkillSelector(self.skill_registry)
+        planner = next((item for item in self.agents if item.type == "planner_agent"), None)
+        if planner is not None:
+            planner.skill_registry = self.skill_registry
         self.ai_name = self.find_ai_name()
         self.speech = None
         self.transcriber = None
         self.recorder = None
         self.is_generating = False
         self.languages = langs
+        provider = self.find_provider()
+        prompt_folder = self.find_prompt_folder()
+
         if tts_enabled:
             self.initialize_tts()
         if stt_enabled:
@@ -145,21 +160,83 @@ class Interaction:
         """Set the query"""
         self.is_active = True
         self.last_query = query
-    
+
+    def find_provider(self):
+        for agent in self.agents:
+            if getattr(agent, "llm", None) is not None:
+                return agent.llm
+        return None
+
+    def find_prompt_folder(self) -> str:
+        if self.ai_name.lower() == "jarvis":
+            return "jarvis"
+        return "base"
+
     async def think(self) -> bool:
         """Request AI agents to process the user input."""
         push_last_agent_memory = False
         if self.last_query is None or len(self.last_query) == 0:
             return False
-        agent = self.router.select_agent(self.last_query)
+
+        # --- 强制路由逻辑 (Force Routing Logic) ---
+        # 如果用户的输入以 "#casual " 或 "/casual " 开头，直接分发给 Casual Agent
+        query_text = self.last_query.strip()
+        if query_text.lower().startswith(("/resume ", "#resume ")):
+            task_id = query_text.split(" ", 1)[1].strip()
+            planner = next((item for item in self.agents if item.type == "planner_agent"), None)
+            if planner is None:
+                self.last_answer = "No planner agent is available to resume the checkpoint."
+                self.last_reasoning = ""
+                return False
+            self.current_agent = planner
+            self.is_generating = True
+            try:
+                self.last_answer, self.last_reasoning = await planner.resume_from_checkpoint(
+                    task_id,
+                    self.speech,
+                )
+            finally:
+                self.is_generating = False
+            return True
+        force_agent = None
+        if query_text.lower().startswith(("#casual ", "/casual ")):
+            force_agent = "casual_agent"
+            query_text = query_text.split(" ", 1)[1].strip() # 移除前缀
+
+        try:
+            skill_selection = self.skill_selector.select(query_text)
+        except (ValueError, OSError) as exc:
+            self.last_answer = f"Skill selection failed: {exc}"
+            self.last_reasoning = ""
+            return False
+        if skill_selection is not None:
+            planner = next((item for item in self.agents if item.type == "planner_agent"), None)
+            if planner is None:
+                self.last_answer = "A Planner agent is required to execute a skill."
+                self.last_reasoning = ""
+                return False
+            self.current_agent = planner
+            self.is_generating = True
+            try:
+                self.last_answer, self.last_reasoning = await planner.process(
+                    skill_selection.query,
+                    self.speech,
+                    selected_skill=skill_selection.skill,
+                )
+            finally:
+                self.is_generating = False
+            return True
+
+        agent = self.router.select_agent(query_text, force_agent=force_agent)
         if agent is None:
             return False
+
         if self.current_agent != agent and self.last_answer is not None:
             push_last_agent_memory = True
         tmp = self.last_answer
         self.current_agent = agent
         self.is_generating = True
-        self.last_answer, self.last_reasoning = await agent.process(self.last_query, self.speech)
+        self.last_answer, self.last_reasoning = await agent.process(query_text, self.speech)
         self.is_generating = False
         if push_last_agent_memory:
             self.current_agent.memory.push('user', self.last_query)

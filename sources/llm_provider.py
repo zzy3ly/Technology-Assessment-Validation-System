@@ -6,6 +6,7 @@ import time
 from urllib.parse import urlparse
 
 import httpx
+import urllib.request
 import requests
 from dotenv import load_dotenv
 from ollama import Client as OllamaClient
@@ -13,6 +14,7 @@ from openai import OpenAI
 
 from sources.logger import Logger
 from sources.utility import pretty_print, animate_thinking
+from sources.recovery import FailureClassifier, RecoveryAction, RetryPolicy
 
 class Provider:
     def __init__(self, provider_name, model, server_address="127.0.0.1:5000", is_local=False):
@@ -37,6 +39,14 @@ class Provider:
         }
         self.logger = Logger("provider.log")
         self.api_key = None
+        self.fallback_provider = None
+        self.retry_policy = RetryPolicy(max_attempts=3, base_delay_seconds=1.0, max_delay_seconds=8.0)
+        self.usage_totals = {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "cost": 0.0,
+        }
         self.internal_url, self.in_docker = self.get_internal_url()
         self.unsafe_providers = ["openai", "deepseek", "dsk_deepseek", "together", "google", "openrouter", "minimax"]
         if self.provider_name not in self.available_providers:
@@ -47,8 +57,56 @@ class Provider:
         elif self.provider_name != "ollama":
             pretty_print(f"Provider: {provider_name} initialized at {self.server_ip}", color="success")
 
+    def _get_http_client(self):
+        """
+        Creates an httpx client configured with correct proxy settings to prevent SSL EOF errors
+        caused by Windows setting https proxy scheme for plain http proxy servers.
+        """
+        proxies = urllib.request.getproxies()
+        proxy_url = None
+        if 'http' in proxies:
+            proxy_url = proxies['http']
+        elif 'https' in proxies:
+            proxy_url = proxies['https']
+            if proxy_url.startswith('https://'):
+                proxy_url = 'http://' + proxy_url[8:]
+
+        # Only use proxy if it's explicitly set
+        return httpx.Client(proxy=proxy_url, verify=False) if proxy_url else httpx.Client(verify=False)
+
     def get_model_name(self) -> str:
         return self.model
+
+    def set_fallback_provider(self, provider) -> None:
+        """Configure a stronger/alternate model used only after recoverable failure."""
+        if provider is self:
+            raise ValueError("fallback provider cannot reference itself")
+        self.fallback_provider = provider
+
+    def get_usage(self) -> dict:
+        return dict(self.usage_totals)
+
+    def _record_usage(self, response) -> None:
+        usage = getattr(response, "usage", None)
+        if usage is None:
+            return
+        prompt = int(getattr(usage, "prompt_tokens", 0) or 0)
+        completion = int(getattr(usage, "completion_tokens", 0) or 0)
+        total = int(getattr(usage, "total_tokens", prompt + completion) or prompt + completion)
+        self.usage_totals["prompt_tokens"] += prompt
+        self.usage_totals["completion_tokens"] += completion
+        self.usage_totals["total_tokens"] += total
+
+    @staticmethod
+    def _compact_history(history: list, max_messages: int = 8, max_chars: int = 6000) -> list:
+        systems = [dict(item) for item in history if item.get("role") == "system"][:1]
+        normal = [dict(item) for item in history if item.get("role") != "system"][-max_messages:]
+        compacted = systems + normal
+        for item in compacted:
+            content = str(item.get("content", ""))
+            if len(content) > max_chars:
+                item["content"] = content[: max_chars // 2] + "\n...[context compacted]...\n" + content[-max_chars // 2 :]
+        return compacted
 
     def get_api_key(self, provider):
         load_dotenv()
@@ -72,25 +130,45 @@ class Provider:
         """
         llm = self.available_providers[self.provider_name]
         self.logger.info(f"Using provider: {self.provider_name} at {self.server_ip}")
-        try:
-            thought = llm(history, verbose)
-        except KeyboardInterrupt:
-            self.logger.warning("User interrupted the operation with Ctrl+C")
-            return "Operation interrupted by user. REQUEST_EXIT"
-        except ConnectionError as e:
-            raise ConnectionError(f"{str(e)}\nConnection to {self.server_ip} failed.")
-        except AttributeError as e:
-            raise NotImplementedError(f"{str(e)}\nIs {self.provider_name} implemented ?")
-        except ModuleNotFoundError as e:
-            raise ModuleNotFoundError(
-                f"{str(e)}\nA import related to provider {self.provider_name} was not found. Is it installed ?")
-        except Exception as e:
-            if "try again later" in str(e).lower():
-                return f"{self.provider_name} server is overloaded. Please try again later."
-            if "refused" in str(e):
-                return f"Server {self.server_ip} seem offline. Unable to answer."
-            raise Exception(f"Provider {self.provider_name} failed: {str(e)}") from e
-        return thought
+        working_history = list(history)
+        last_error = None
+        for attempt in range(1, self.retry_policy.max_attempts + 1):
+            try:
+                thought = llm(working_history, verbose)
+                if thought is None or not str(thought).strip():
+                    raise ValueError("Empty response from model provider")
+                return thought
+            except KeyboardInterrupt:
+                self.logger.warning("User interrupted the operation with Ctrl+C")
+                return "Operation interrupted by user. REQUEST_EXIT"
+            except AttributeError as exc:
+                raise NotImplementedError(f"{exc}\nIs {self.provider_name} implemented ?") from exc
+            except ModuleNotFoundError as exc:
+                raise ModuleNotFoundError(
+                    f"{exc}\nA import related to provider {self.provider_name} was not found. Is it installed ?"
+                ) from exc
+            except Exception as exc:
+                last_error = exc
+                failure = FailureClassifier.classify(exc, source="model", attempt=attempt)
+                self.logger.warning(
+                    f"Model failure kind={failure.kind.value} action={failure.action.value} "
+                    f"attempt={attempt}/{self.retry_policy.max_attempts}: {exc}"
+                )
+                if failure.action == RecoveryAction.COMPACT_CONTEXT and attempt < self.retry_policy.max_attempts:
+                    working_history = self._compact_history(working_history)
+                    time.sleep(self.retry_policy.delay(attempt))
+                    continue
+                if failure.retryable and attempt < self.retry_policy.max_attempts:
+                    time.sleep(self.retry_policy.delay(attempt))
+                    continue
+                break
+        if self.fallback_provider is not None:
+            self.logger.warning(
+                f"Falling back from {self.provider_name}/{self.model} to "
+                f"{self.fallback_provider.provider_name}/{self.fallback_provider.model}"
+            )
+            return self.fallback_provider.respond(working_history, verbose)
+        raise Exception(f"Provider {self.provider_name} failed: {last_error}") from last_error
 
     def is_ip_online(self, address: str, timeout: int = 10) -> bool:
         """
@@ -228,6 +306,7 @@ class Provider:
                 model=self.model,
                 messages=history,
             )
+            self._record_usage(response)
             if response is None:
                 raise Exception("OpenAI response is empty.")
             thought = response.choices[0].message.content
@@ -283,6 +362,7 @@ class Provider:
                 model=self.model,
                 messages=history,
             )
+            self._record_usage(response)
             if response is None:
                 raise Exception("Google response is empty.")
             thought = response.choices[0].message.content
@@ -306,6 +386,7 @@ class Provider:
                 model=self.model,
                 messages=history,
             )
+            self._record_usage(response)
             if response is None:
                 raise Exception("Together AI response is empty.")
             thought = response.choices[0].message.content
@@ -319,15 +400,20 @@ class Provider:
         """
         Use deepseek api to generate text.
         """
-        client = OpenAI(api_key=self.api_key, base_url="https://api.deepseek.com")
+        client = OpenAI(
+            api_key=self.api_key,
+            base_url=self.server_address,
+            http_client=self._get_http_client()
+        )
         if self.is_local:
             raise Exception("Deepseek (API) is not available for local use. Change config.ini")
         try:
             response = client.chat.completions.create(
-                model="deepseek-chat",
+                model=self.model,
                 messages=history,
                 stream=False
             )
+            self._record_usage(response)
             thought = response.choices[0].message.content
             if verbose:
                 print(thought)
@@ -404,6 +490,7 @@ class Provider:
                 model=self.model,
                 messages=history,
             )
+            self._record_usage(response)
             if response is None:
                 raise Exception("OpenRouter response is empty.")
             thought = response.choices[0].message.content
@@ -435,6 +522,7 @@ class Provider:
                 messages=history,
                 temperature=1.0,
             )
+            self._record_usage(response)
             if response is None:
                 raise Exception("MiniMax response is empty.")
             thought = response.choices[0].message.content

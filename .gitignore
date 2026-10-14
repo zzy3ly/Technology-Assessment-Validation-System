@@ -208,3 +208,29 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Local Web task history can include user prompts and tool output.
+.web-runtime/
+**/.agenticseek_web/
+
+# Local runtime state and generated artifacts
+workspace/
+conversations/
+test_outputs/**/*.json
+test_outputs/**/*.jsonl
+test_outputs/**/baseline_sources/
+frontend/agentic-seek-front/build/
+coverage/
+.pytest_cache/
+
+# Local notes and private analysis files
+pomodoro_notes.txt
+zero_trust_notes.txt
+解读/
+
+# Docker/OS/editor leftovers
+*.new
+*.stale-*/
+.vscode/
+.idea/
+Thumbs.db

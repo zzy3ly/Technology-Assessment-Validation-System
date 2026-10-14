@@ -46,7 +46,9 @@ class CoderAgent(Agent):
     async def process(self, prompt, speech_module) -> str:
         answer = ""
         attempt = 0
-        max_attempts = 5
+        # Node-level retries and backoff are owned by PlannerAgent. Keep only one
+        # local correction attempt so an individual node cannot loop indefinitely.
+        max_attempts = 2
         prompt = self.add_sys_info_prompt(prompt)
         self.memory.push('user', prompt)
         clarify_trigger = "REQUEST_CLARIFICATION"
@@ -82,6 +84,7 @@ class CoderAgent(Agent):
             attempt += 1
         self.status_message = "Ready"
         if attempt == max_attempts:
+            self.success = False
             return "I'm sorry, I couldn't find a solution to your problem. How would you like me to proceed ?", reasoning
         self.last_answer = answer
         return answer, reasoning

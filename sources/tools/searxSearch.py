@@ -1,6 +1,7 @@
 import requests
 from bs4 import BeautifulSoup
 import os
+import re
 
 if __name__ == "__main__": # if running as a script for individual testing
     sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -16,7 +17,10 @@ class searxSearch(Tools):
         self.tag = "web_search"
         self.name = "searxSearch"
         self.description = "A tool for searching a SearxNG for web search"
-        self.base_url = os.getenv("SEARXNG_BASE_URL")  # Requires a SearxNG base URL
+        self.base_url = base_url or os.getenv("SEARXNG_BASE_URL")
+        # if running outside docker, we need to map searxng to localhost
+        if self.base_url == "http://searxng:8080" and not os.path.exists("/.dockerenv"):
+            self.base_url = "http://127.0.0.1:8080"
         self.user_agent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36"
         self.paywall_keywords = [
             "Member-only", "access denied", "restricted content", "404", "this page is not working"
@@ -62,7 +66,7 @@ class searxSearch(Tools):
         if not blocks:
             return "Error: No search query provided."
 
-        query = blocks[0].strip()
+        query = re.sub(r'^search\s*:\s*', '', blocks[0].strip(), flags=re.IGNORECASE)
         if not query:
             return "Error: Empty search query provided."
 
@@ -77,9 +81,10 @@ class searxSearch(Tools):
             'Upgrade-Insecure-Requests': '1',
             'User-Agent': self.user_agent
         }
-        data = f"q={query}&categories=general&language=auto&time_range=&safesearch=0&theme=simple".encode('utf-8')
+        data = {"q": query, "categories": "general", "language": "auto",
+                "time_range": "", "safesearch": "0", "theme": "simple"}
         try:
-            response = requests.post(search_url, headers=headers, data=data, verify=False)
+            response = requests.post(search_url, headers=headers, data=data, verify=False, timeout=15)
             response.raise_for_status()
             html_content = response.text
             soup = BeautifulSoup(html_content, 'html.parser')
@@ -92,16 +97,19 @@ class searxSearch(Tools):
                     description = article.find('p', class_='content').text.strip() if article.find('p', class_='content') else "No Description"
                     results.append(f"Title:{title}\nSnippet:{description}\nLink:{url}")
             if len(results) == 0:
-                return "No search results, web search failed."
+                return "Error: No search results, web search failed."
             return "\n\n".join(results)  # Return results as a single string, separated by newlines
         except requests.exceptions.RequestException as e:
-            raise Exception("\nSearxng search failed. did you run start_services.sh? is docker still running?") from e
+            raise RuntimeError(
+                f"SearxNG request failed ({type(e).__name__}): {e}. "
+                "Check whether start_services.sh and Docker are running."
+            ) from e
 
     def execution_failure_check(self, output: str) -> bool:
         """
         Checks if the execution failed based on the output.
         """
-        return "Error" in output
+        return output.startswith("Error:")
 
     def interpreter_feedback(self, output: str) -> str:
         """

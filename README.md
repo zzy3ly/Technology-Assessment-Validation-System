@@ -8,6 +8,12 @@
 
 *A **100% local alternative to Manus AI**, this voice-enabled AI assistant autonomously browses the web, writes code, and plans tasks while keeping all data on your device. Tailored for local reasoning models, it runs entirely on your hardware, ensuring complete privacy and zero cloud dependency.*
 
+> This repository also contains a reliability-focused Web runtime: explicit workflow states, checkpoint recovery, unified failure handling, reflection/evaluation agents, and a React execution console. See [the open-source repository guide](./docs/OPEN_SOURCE_GUIDE.md) and [Web runtime guide](./WEB_GUIDE.md) for the maintained project structure and current startup commands.
+
+## Attribution
+
+This project is a derivative work based on [AgenticSeek](https://github.com/Fosowl/agenticSeek), licensed under the GNU General Public License v3.0. This version adds a reliability-focused multi-agent workflow, reflection and evaluation agents, checkpoint recovery, Skill support, and a Web execution interface.
+
 [![Visit AgenticSeek](https://img.shields.io/static/v1?label=Website&message=AgenticSeek&color=blue&style=flat-square)](https://fosowl.github.io/agenticSeek.html) ![License](https://img.shields.io/badge/license-GPL--3.0-green) [![Discord](https://img.shields.io/badge/Discord-Join%20Us-7289DA?logo=discord&logoColor=white)](https://discord.gg/8hGDaME3TC) [![Twitter](https://img.shields.io/twitter/url/https/twitter.com/fosowl.svg?style=social&label=Update%20%40Fosowl)](https://x.com/Martin993886460) [![GitHub stars](https://img.shields.io/github/stars/Fosowl/agenticSeek?style=social)](https://github.com/Fosowl/agenticSeek/stargazers)
 
 ### Why AgenticSeek ?

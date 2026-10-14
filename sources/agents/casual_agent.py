@@ -1,3 +1,4 @@
+# 它专门负责与用户进行无具体任务的日常闲聊 (Casual Talk) 或直接的问答
 import asyncio
 
 from sources.utility import pretty_print, animate_thinking

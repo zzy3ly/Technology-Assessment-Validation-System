@@ -438,15 +438,25 @@ class AgentRouter:
         self.logger.error("Planner agent not found.")
         return None
     
-    def select_agent(self, text: str) -> Agent:
+    def select_agent(self, text: str, force_agent: str = None) -> Agent:
         """
         Select the appropriate agent based on the text.
         Args:
             text (str): The text to select the agent from
+            force_agent (str, optional): If provided, bypass routing and force select this agent type.
         Returns:
             Agent: The selected agent
         """
         assert len(self.agents) > 0, "No agents available."
+
+        # If user explicitly requested an agent type, try to find and return it
+        if force_agent:
+            for agent in self.agents:
+                if agent.type == force_agent:
+                    pretty_print(f"Force routing to agent: {agent.agent_name} ({agent.type})", color="info")
+                    return agent
+            pretty_print(f"Warning: Requested agent type '{force_agent}' not found. Falling back to auto-routing.", color="warning")
+
         if len(self.agents) == 1:
             return self.agents[0]
         lang = self.lang_analysis.detect_language(text)

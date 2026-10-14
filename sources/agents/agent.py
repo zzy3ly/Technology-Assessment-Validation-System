@@ -4,6 +4,7 @@ from abc import abstractmethod
 import os
 import random
 import time
+import re
 
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
@@ -194,13 +195,14 @@ class Agent():
         """
         Return the answer with all the blocks inserted, as text.
         """
-        if self.last_answer is None:
+        if answer is None:
             return
         raw = ""
-        lines = self.last_answer.split("\n")
+        lines = answer.split("\n")
         for line in lines:
-            if "block:" in line:
-                block_idx = int(line.split(":")[1])
+            match = re.fullmatch(r"block:(\d+)", line.strip())
+            if match:
+                block_idx = int(match.group(1))
                 if block_idx < len(self.blocks_result):
                     raw += self.blocks_result[block_idx].__str__()
             else:
@@ -216,8 +218,9 @@ class Agent():
             return
         lines = self.last_answer.split("\n")
         for line in lines:
-            if "block:" in line:
-                block_idx = int(line.split(":")[1])
+            match = re.fullmatch(r"block:(\d+)", line.strip())
+            if match:
+                block_idx = int(match.group(1))
                 if block_idx < len(self.blocks_result):
                     self.blocks_result[block_idx].show()
             else:
@@ -227,22 +230,19 @@ class Agent():
         """
         Remove all code/query blocks within a tag from the answer text.
         """
-        tag = f'```'
-        lines = text.split('\n')
-        post_lines = []
-        in_block = False
-        block_idx = 0
-        for line in lines:
-            if tag in line and not in_block:
-                in_block = True
-                continue
-            if not in_block:
-                post_lines.append(line)
-            if tag in line:
-                in_block = False
-                post_lines.append(f"block:{block_idx}")
-                block_idx += 1
-        return "\n".join(post_lines)
+        # Indices are global for the agent, not reset to zero for every answer.
+        # Tools execute by registration order, which can differ from fence order.
+        indices = list(getattr(self, "_last_execution_indices", []))
+        def replace(match):
+            tool_type = match.group(1).split(":", 1)[0].strip().lower()
+            content = match.group(2).strip()
+            for index in indices:
+                block = self.blocks_result[index]
+                if block.tool_type == tool_type and block.block.strip() == content:
+                    indices.remove(index)
+                    return f"block:{index}"
+            return f"[Tool block not executed: {tool_type or 'unknown'}]"
+        return re.sub(r"```([^\n]*)\n(.*?)```", replace, text, flags=re.DOTALL)
     
     def show_block(self, block: str) -> None:
         """
@@ -259,6 +259,9 @@ class Agent():
         feedback = ""
         success = True
         blocks = None
+        executed_any = False
+        call_signatures = set()
+        self._last_execution_indices = []
         if answer.startswith("```"):
             answer = "I will execute:\n" + answer # there should always be a text before blocks for the function that display answer
 
@@ -270,11 +273,20 @@ class Agent():
             if blocks != None:
                 pretty_print(f"Executing {len(blocks)} {name} blocks...", color="status")
                 for block in blocks:
+                    signature = (name, str(block).strip())
+                    if signature in call_signatures:
+                        feedback = f"Error: Repeated call to the same tool '{name}' with identical arguments."
+                        self.success = False
+                        self.memory.push('user', feedback)
+                        return False, feedback
+                    call_signatures.add(signature)
+                    executed_any = True
                     self.show_block(block)
                     output = tool.execute([block])
                     feedback = tool.interpreter_feedback(output) # tool interpreter feedback
                     success = not tool.execution_failure_check(output)
                     self.blocks_result.append(executorResult(block, feedback, success, name))
+                    self._last_execution_indices.append(len(self.blocks_result) - 1)
                     if not success:
                         self.success = False
                         self.memory.push('user', feedback)
@@ -282,4 +294,9 @@ class Agent():
                 self.memory.push('user', feedback)
                 if save_path != None:
                     tool.save_block(blocks, save_path)
+        if "```" in answer and not executed_any:
+            feedback = "Error: Unknown or unsupported tool block; no registered tool matched the model output."
+            self.success = False
+            self.memory.push('user', feedback)
+            return False, feedback
         return True, feedback

@@ -340,6 +340,8 @@ class BrowserAgent(Agent):
             tuple containing the final answer and reasoning
         """
         complete = False
+        navigation_steps = 0
+        max_navigation_steps = 12
 
         animate_thinking(f"Thinking...", color="status")
         mem_begin_idx = self.memory.push('user', self.search_prompt(user_prompt))
@@ -351,10 +353,20 @@ class BrowserAgent(Agent):
         self.status_message = "Searching..."
         search_result_raw = self.tools["web_search"].execute([ai_prompt], False)
         search_result = self.jsonify_search_results(search_result_raw)[:16]
+        if not search_result:
+            self.success = False
+            self.last_answer = search_result_raw or "No search results returned."
+            return self.last_answer, reasoning
         self.show_search_results(search_result)
         prompt = self.make_newsearch_prompt(user_prompt, search_result)
         unvisited = [None]
-        while not complete and len(unvisited) > 0 and not self.stop:
+        while (
+            not complete
+            and len(unvisited) > 0
+            and navigation_steps < max_navigation_steps
+            and not self.stop
+        ):
+            navigation_steps += 1
             self.memory.clear()
             unvisited = self.select_unvisited(search_result)
             answer, reasoning = await self.llm_decide(prompt, show_reasoning = False)
@@ -423,6 +435,10 @@ class BrowserAgent(Agent):
             self.status_message = "Navigating..."
             self.browser.screenshot()
 
+        if not complete and navigation_steps >= max_navigation_steps:
+            self.success = False
+            self.last_answer = "Browser navigation stopped after reaching the maximum step limit."
+            return self.last_answer, self.last_reasoning
         pretty_print("Exited navigation, starting to summarize finding...", color="status")
         prompt = self.conclude_prompt(user_prompt)
         mem_last_idx = self.memory.push('user', prompt)

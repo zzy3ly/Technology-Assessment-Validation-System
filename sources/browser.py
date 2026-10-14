@@ -169,7 +169,8 @@ def create_chrome_options(headless=False, stealth_mode=True, crx_path="./crx/nop
     
     user_agent = get_random_user_agent()
     width, height = (1920, 1080)
-    profile_dir = f"/tmp/chrome_profile_{uuid.uuid4().hex[:8]}"
+    import tempfile
+    profile_dir = os.path.join(tempfile.gettempdir(), f"chrome_profile_{uuid.uuid4().hex[:8]}")
     
     # Core options
     chrome_options.add_argument("--no-sandbox")

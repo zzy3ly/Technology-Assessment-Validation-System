@@ -26,16 +26,31 @@ class FileAgent(Agent):
     
     async def process(self, prompt, speech_module) -> str:
         exec_success = False
+        attempts = 0
+        max_attempts = 2
         prompt += f"\nYou must work in directory: {self.work_dir}"
         self.memory.push('user', prompt)
-        while exec_success is False and not self.stop:
+        answer, reasoning = "", ""
+        while exec_success is False and attempts < max_attempts and not self.stop:
+            attempts += 1
             await self.wait_message(speech_module)
             animate_thinking("Thinking...", color="status")
             answer, reasoning = await self.llm_request()
             self.last_reasoning = reasoning
+            blocks_before = len(self.blocks_result)
             exec_success, _ = self.execute_modules(answer)
+            if len(self.blocks_result) == blocks_before:
+                exec_success = False
+                self.success = False
+                self.memory.push(
+                    'user',
+                    "No valid file tool call was produced. Return one valid file_finder or bash block."
+                )
             answer = self.remove_blocks(answer)
             self.last_answer = answer
+        if not exec_success:
+            self.success = False
+            answer = answer or "File operation failed after bounded attempts."
         self.status_message = "Ready"
         return answer, reasoning
 

@@ -1,0 +1,2 @@
+Claim 1: Python introduced asyncio.TaskGroup in Python 3.11.
+Claim 2: Python lists preserve insertion order only from Python 3.12 onward.

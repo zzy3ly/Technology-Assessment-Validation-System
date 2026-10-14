@@ -1,0 +1,3 @@
+Architecture review at 10:00.
+Owner: Lin.
+Decision: add deterministic agent evaluation before release.

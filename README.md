@@ -32,6 +32,8 @@ The main contribution of this version is turning a prompt-driven workflow into a
 
 ![TAVS execution trace](./docs/screenshots/tavs-execution-trace.png)
 
+The task details use the same updated style as the home screen: a light sidebar, rounded task message and composer, and a separate execution panel for workflow nodes, tool results, and validation/recovery. This screenshot renders a saved real execution record in the current frontend; it is not a newly executed run.
+
 ## Repository structure
 
 ```text

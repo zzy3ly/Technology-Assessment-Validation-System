@@ -28,9 +28,9 @@
 5. **Skill 机制**：Skill 支持注册、按需加载、规划约束、运行校验和 checkpoint 元数据记录。
 6. **证据优先的 Web 界面**：用户可以查看执行轨迹、工具输出、校验记录和恢复状态。
 
-![TAVS 执行轨迹](./docs/screenshots/tavs-execution-trace.png)
+![TAVS 执行轨迹](./docs/screenshots/tavs-live-workflow-20261111.png)
 
-任务详情页已同步新版样式：浅色侧栏、圆角任务消息与输入框，右侧执行面板保留工作流、工具结果、校验与恢复入口。此图使用当前前端展示已保存的真实历史执行记录，并非本次重新运行任务的结果。
+当前系统真实运行（2026-11-11）：coder 使用 Python 实际执行 `print(sum(i*i for i in range(1,6)))`，casual 根据工具输出报告结果 **55**。两个工作流节点均成功完成（2/2，2,817 tokens），任务 ID：`12238030a2b941cc8ed5b05228a4f604`。截图直接取自运行中的应用，不是历史记录重放。SearXNG 未启动，不影响本次纯代码任务。
 
 ## 目录结构
 

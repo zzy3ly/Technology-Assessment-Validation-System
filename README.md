@@ -30,9 +30,9 @@ The main contribution of this version is turning a prompt-driven workflow into a
 5. **Skill mechanism** — skills are registered, loaded on demand, validated, and connected to the workflow with checkpoint metadata.
 6. **Evidence-first Web UI** — users can inspect the execution trace, tool outputs, validation records, and recovery checkpoints.
 
-![TAVS execution trace](./docs/screenshots/tavs-execution-trace.png)
+![TAVS execution trace](./docs/screenshots/tavs-live-workflow-20261111.png)
 
-The task details use the same updated style as the home screen: a light sidebar, rounded task message and composer, and a separate execution panel for workflow nodes, tool results, and validation/recovery. This screenshot renders a saved real execution record in the current frontend; it is not a newly executed run.
+Live run on the current system (2026-11-11): coder executed `print(sum(i*i for i in range(1,6)))` using Python, then casual reported the result **55**. Both workflow nodes completed successfully (2/2, 2,817 tokens). Task ID: `12238030a2b941cc8ed5b05228a4f604`. The screenshot was captured directly from the running application, not a historical replay. SearXNG was offline; this code-only task does not require search.
 
 ## Repository structure
 

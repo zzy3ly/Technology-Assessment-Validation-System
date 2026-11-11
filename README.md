@@ -4,6 +4,8 @@
 
 ![TAVS Web workspace](./docs/screenshots/tavs-workspace.png)
 
+The workspace now features a quiet, ChatGPT-inspired layout with a light sidebar, centered welcome area, and rounded task composer. The screenshot shows the frontend with the backend disconnected.
+
 ## What it does
 
 TAVS combines:

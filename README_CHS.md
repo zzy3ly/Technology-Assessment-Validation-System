@@ -4,6 +4,8 @@
 
 ![TAVS 工作台](./docs/screenshots/tavs-workspace.png)
 
+工作台采用参考 ChatGPT 的简洁布局：浅色侧栏、居中欢迎区和圆角任务输入框，保留任务模式、Skill 与断点恢复入口。截图为后端未连接时的真实前端页面。
+
 ## 系统能力
 
 - 通过 SearXNG 和浏览器 Agent 进行联网调研；

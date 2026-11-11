@@ -160,10 +160,7 @@ export default function App() {
       {view === 'workspace' && <div className={'workspace-layout ' + (task ? 'with-task' : '')}>
         <main className="workspace-main">
           {!selectedId ? <section className="welcome">
-            <div className="eyebrow"><span className="tiny-line" /> RESEARCH · BUILD · VERIFY</div>
-            <h1>从一个问题，<br />走到<span>可验证的答案。</span></h1>
-            <p className="hero-description">面向研发团队的技术调研与方案验证助手。<br />让多智能体协作，也让每一步执行有迹可循。</p>
-            <div className="capability-strip"><span>↗ 联网调研</span><span>⌘ 代码与文件</span><span>✓ 反思与验证</span><span>↻ 故障恢复</span></div>
+            <h1>随时可以开始。</h1>
             <div className="examples">{examples.map(ex => <button className="example-card" key={ex.number} onClick={() => selectExample(ex)}><span className="example-number">{ex.number}<span>↗</span></span><h2>{ex.title}</h2><p>{ex.desc}</p></button>)}</div>
           </section> : task ? <section className="task-content">
             <div className="task-title"><div><span className="eyebrow">TASK / {task.id.slice(0, 8)}</span><h1>任务详情</h1></div><Status state={task.status} /></div>
@@ -177,7 +174,7 @@ export default function App() {
 
           <form className="composer" onSubmit={submit}>
             <label className="sr-only" htmlFor="task-input">任务内容</label>
-            <textarea id="task-input" ref={inputRef} value={query} maxLength={32000} onChange={e => setQuery(e.target.value)} placeholder="描述你要调研的问题或验证的方案，附上文件路径、约束和验收标准…" onKeyDown={e => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') submit(e); }} />
+            <textarea id="task-input" ref={inputRef} value={query} maxLength={32000} onChange={e => setQuery(e.target.value)} placeholder="向 agenticSeek 提问，或描述一项任务…" onKeyDown={e => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') submit(e); }} />
             <div className="composer-controls">
               <div className="composer-selects"><label><span>执行方式</span><select aria-label="执行方式" value={skill ? 'planner' : mode} disabled={Boolean(skill)} onChange={e => setMode(e.target.value)}>{Object.entries(modes).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
                 <label><span>Skill</span><select aria-label="选择 Skill" value={skill} onChange={e => setSkill(e.target.value)}><option value="">按任务自由执行</option>{skills.map(s => <option key={s.name} value={s.name}>{s.name === 'test-driven-code-repair' ? '测试驱动代码修复' : s.name}</option>)}</select></label>
